@@ -1,0 +1,86 @@
+package package1
+
+import com.google.gson.Gson
+import org.eclipse.paho.client.mqttv3.*
+import java.util.concurrent.ConcurrentHashMap
+
+fun main() {
+    val brokerUrl = "tcp://localhost:1883"
+    val clientId = MqttClient.generateClientId()
+    val mqttClient = MqttClient(brokerUrl, clientId).apply {
+        connect()
+    }
+
+    val service = InsightProcessingService(mqttClient, "processed/insights")
+
+    val insightsTopic = "raw/insights"
+    mqttClient.subscribe(insightsTopic) { _, msg ->
+        val message = String(msg.payload)
+        try {
+            val insight = Gson().fromJson(message, Insight::class.java)
+            service.processInsight(insight)
+        } catch (e: Exception) {
+            println("Failed to process received message: $message")
+            e.printStackTrace()
+        }
+    }
+
+    println("Subscribed to $insightsTopic and processing insights...")
+}
+
+data class Insight(
+    val objectUid: String,
+    val state: String,
+    val posX: Int,
+    val posY: Int,
+    val timestamp: Long,
+    val zUid: String,
+    val sUid: String,
+    val threatCat: Int,
+    val camUid: String,
+)
+
+class InsightProcessingService(private val mqttClient: MqttClient, private val topic: String) {
+    private val insights = ConcurrentHashMap<String, ConcurrentHashMap<String, Insight>>()
+
+    init {
+        startPeriodicMergingAndPublishing()
+    }
+
+    fun processInsight(insight: Insight) {
+        insights.computeIfAbsent(insight.camUid) { ConcurrentHashMap() }[insight.objectUid] = insight
+    }
+
+    private fun startPeriodicMergingAndPublishing() {
+        Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate({
+            val mergedOutput = mergeInsights()
+            publishMergedInsights(mergedOutput)
+            insights.clear()
+        }, 0, 5, TimeUnit.MINUTES)
+    }
+
+    private fun mergeInsights(): String {
+        val summaryByCamAndThreat = insights.values.flatMap { it.values }.groupBy { it.camUid }
+            .mapValues { camEntry ->
+                camEntry.value.groupBy { insight -> insight.threatCat }.mapValues { it.value.size }
+            }
+
+        val merged = mapOf(
+            "command" to "MERGE",
+            "data" to summaryByCamAndThreat,
+            "meta" to mapOf("timestamp" to System.currentTimeMillis())
+        )
+        return Gson().toJson(merged)
+    }
+
+    private fun publishMergedInsights(mergedOutput: String) {
+        val message = MqttMessage(mergedOutput.toByteArray())
+        try {
+            mqttClient.publish(topic, message)
+            println("Published merged insights: $mergedOutput")
+        } catch (e: MqttException) {
+            println("Failed to publish merged insights")
+            e.printStackTrace()
+        }
+    }
+}
