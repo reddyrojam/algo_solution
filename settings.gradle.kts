@@ -1,5 +1,14 @@
-plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.5.0"
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+    }
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.namespace == "org.gradle.toolchains" && requested.id.name == "foojay-resolver-convention") {
+                useVersion("")
+            }
+        }
+    }
 }
-rootProject.name = "task2"
 
+rootProject.name = "task2"

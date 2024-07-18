@@ -27,11 +27,14 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter:5.7.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0")
     implementation("com.rabbitmq:amqp-client:5.14.0")
-
+    implementation("com.h2database:h2:2.1.214")
+    implementation( "org.hibernate:hibernate-core:5.5.7.Final")
+    implementation ("jakarta.persistence:jakarta.persistence-api:2.2.3")
+    implementation("org.hibernate:hibernate-core:5.5.7.Final")
 
 }
 
-// Use JUnit Platform for testing
+
 tasks.test {
     useJUnitPlatform()
 }
@@ -43,3 +46,4 @@ application {
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
     kotlinOptions.jvmTarget = "1.8"
 }
+
